@@ -3,10 +3,26 @@
 #
 #  Author: Kevin Holman
 #  v1.1
+#  Amended by Sebastian Eberhard
 #=================================================================================
 
-# Output Directory
-$OutDir = "C:\Report"
+Param(
+    [Parameter(Mandatory=$True, HelpMessage="Output Directory for CSV Files" )]
+    [string]$OutDir,
+
+    [Parameter(Mandatory=$False, HelpMessage="An Array of Management Pack Display Names, e.g. ('My Service MP', 'My Other Service MP')")]
+    [string[]]$FilterMPDisplayList = $null,
+    
+    [Parameter(Mandatory=$False, HelpMessage="A SCOM Management Server Name. Necessary if not running Script on Management Server.")]
+    [string]$ManagementServer = "localhost",
+
+    [Parameter(Mandatory=$False, HelpMessage="Delimiter for CSV Export, e.g. ',' or ';'")]
+    [string]$Delimiter = ","
+)
+
+Import-Module OperationsManager
+
+#Get-SCOMManagementGroupConnection $ManagementServer
 
 Write-Host `n"Starting Script to get all rules and monitors in SCOM" -ForegroundColor Green
 
@@ -21,15 +37,23 @@ Write-Host `n"Output path is ($OutDir)" -ForegroundColor Green
 $RuleReport = @()
 
 # Connect to SCOM
-Write-Host `n"Connecting to local SCOM Management Server..." -ForegroundColor Green
-$MG = Get-SCOMManagementGroup -ComputerName "localhost"
+Write-Host `n"Connecting to SCOM Management Server $ManagementServer ..." -ForegroundColor Green
+New-SCOMManagementGroupConnection -ComputerName $ManagementServer
+
+$MG = Get-SCOMManagementGroup
 
 #Get all the SCOM Rules
 Write-Host `n"Getting all Rules in SCOM..." -ForegroundColor Green
-$Rules = Get-SCOMRule
+
+if ($null -ne $FilterMPDisplayList) {
+  $Rules = Get-SCOMManagementPack | Where-Object -Property DisplayName -IN $filterMPDisplayList | Get-SCOMRule
+}
+else {
+  $Rules = Get-SCOMRule
+}
 
 #Create a hashtable of all the SCOM classes for faster retreival based on Class ID
-$Classes = Get-SCOMClass
+$Classes =  Get-SCOMClass
 $ClassHT = @{}
 FOREACH ($Class in $Classes)
 {
@@ -84,6 +108,9 @@ FOREACH ($Rule in $Rules)
         $AlertName = $WAXMLRoot.AlertMessageId.Split("'")[1]
       }
       $AlertDisplayName = $MP.GetStringResource($AlertName).DisplayName
+      $AlertDescription = $MP.GetStringResource($AlertName).Description
+
+
       #Get Alert Priority and Severity
       $AlertPriority = $WAXMLRoot.Priority
       $AlertPriority = switch($AlertPriority)
@@ -124,6 +151,8 @@ FOREACH ($Rule in $Rules)
             $AlertName = $WAXMLRoot.AlertMessageId.Split("'")[1]
           }
           $AlertDisplayName = $MP.GetStringResource($AlertName).DisplayName
+          $AlertDescription = $MP.GetStringResource($AlertName).Description
+
           #Get Alert Priority and Severity
           $AlertPriority = $WAXMLRoot.Priority
           $AlertPriority = switch($AlertPriority)
@@ -159,11 +188,13 @@ FOREACH ($Rule in $Rules)
   $obj | Add-Member -Type NoteProperty -Name "MPName" -Value $MPName
   $obj | Add-Member -Type NoteProperty -Name "DataSource" -Value $RuleDS
   $obj | Add-Member -Type NoteProperty -Name "Description" -Value $Description
+  $obj | Add-Member -Type NoteProperty -Name "AlertDescription" -Value $AlertDescription
+
   $RuleReport += $obj
 }
 
 Write-Host `n"Generating Rules.csv at ($OutDir)..." -ForegroundColor Green
-$RuleReport | Export-Csv $OutDir\Rules.csv -NotypeInformation
+$RuleReport | Export-Csv $OutDir\Rules.csv -NotypeInformation -Delimiter $Delimiter -Encoding UTF8
 
 
 
@@ -175,7 +206,13 @@ $MonitorReport = @()
 
 #Get all the SCOM Monitors
 Write-Host `n"Getting all Monitors in SCOM..." -ForegroundColor Green
-$Monitors =  Get-SCOMMonitor
+
+if ($null -ne $FilterMPDisplayList) {
+  $Monitors =  Get-SCOMManagementPack | Where-Object -Property DisplayName -IN $filterMPDisplayList | Get-SCOMMonitor
+}
+else {
+  $Monitors = Get-SCOMMonitor
+}
 
 #Loop through each monitor and get properties
 Write-Host `n"Getting Properties from Each Monitor..." -ForegroundColor Green
@@ -212,7 +249,9 @@ FOREACH ($Monitor in $Monitors)
     $GenAlert = $true
     #Get the Alert Display Name from the AlertMessageID and MP
     $AlertName =  $AlertSettings.AlertMessage.Identifier.Path
-    $AlertDisplayName = $MP.GetStringResource($AlertName).DisplayName    
+    $AlertDisplayName = $MP.GetStringResource($AlertName).DisplayName
+    $AlertDescription = $MP.GetStringResource($AlertName).Description   
+    #$AlertDescription = $AlertDescription.replace("`n"," \r\n ")
     $AlertSeverity = $AlertSettings.AlertSeverity
       IF ($AlertSeverity -eq "MatchMonitorHealth") {$AlertSeverity = $AlertSettings.AlertOnState}
       IF ($AlertSeverity -eq "Error") {$AlertSeverity = "Critical"}
@@ -237,9 +276,11 @@ FOREACH ($Monitor in $Monitors)
   $obj | Add-Member -Type NoteProperty -Name "MonitorClassification" -Value $MonitorClassification
   $obj | Add-Member -Type NoteProperty -Name "MonitorType" -Value $MonitorType
   $obj | Add-Member -Type NoteProperty -Name "Description" -Value $Description
+  $obj | Add-Member -Type NoteProperty -Name "AlertDescription" -Value $AlertDescription
+
   $MonitorReport += $obj
 }
 
 Write-Host `n"Generating Monitors.csv at ($OutDir)..." -ForegroundColor Green
-$MonitorReport | Export-Csv $OutDir\Monitors.csv -NotypeInformation
+$MonitorReport | Export-Csv $OutDir\Monitors.csv -NotypeInformation -Delimiter $Delimiter -Encoding UTF8
 #End of Script
