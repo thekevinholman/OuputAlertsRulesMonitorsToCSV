@@ -9,5 +9,5 @@
 https://kevinholman.com/2018/08/11/get-all-scom-rules-and-monitors-with-their-alert-details-to-a-csv/
 
 Version History:
-* 1.4
+* 1.4  (09-02-2021)
 	* Fixed bug when Alert did not have an AlertMessageId string defined
