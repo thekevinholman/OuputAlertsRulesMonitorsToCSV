@@ -2,27 +2,43 @@
 #  Get all Rule and Monitors from SCOM and their properties
 #
 #  Author: Kevin Holman
-#  v1.1
+#  v1.4
 #=================================================================================
+param($OutputDir,$ManagementServer)
 
-# Output Directory
-$OutDir = "C:\Report"
+IF ($OutputDir)
+{
+  $OutDir = $OutputDir
+}
+ELSE
+{
+  $OutDir = "C:\Report"
+}
+
+IF ($ManagementServer)
+{
+  $ManagementServerName = $ManagementServer
+}
+ELSE
+{
+  $ManagementServerName = "localhost"
+}
+
 
 Write-Host `n"Starting Script to get all rules and monitors in SCOM" -ForegroundColor Green
 
 IF (!(Test-Path $OutDir))
 {
-  Write-Host `n"Output folder not found.  Creating folder..." -ForegroundColor Magenta
+  Write-Host `n"Output folder not found for ($OutDir).  Creating folder..." -ForegroundColor Magenta
   md $OutDir
 }
-
 Write-Host `n"Output path is ($OutDir)" -ForegroundColor Green
 
-$RuleReport = @()
-
 # Connect to SCOM
-Write-Host `n"Connecting to local SCOM Management Server..." -ForegroundColor Green
-$MG = Get-SCOMManagementGroup -ComputerName "localhost"
+Write-Host `n"Connecting to SCOM Management Server ($ManagementServerName)..." -ForegroundColor Green
+$MG = Get-SCOMManagementGroup -ComputerName $ManagementServerName
+
+$RuleReport = @()
 
 #Get all the SCOM Rules
 Write-Host `n"Getting all Rules in SCOM..." -ForegroundColor Green
@@ -42,6 +58,7 @@ $AlertWA = $HealthMP.GetModuleType("System.Health.GenerateAlert")
 $AlertWAID = $AlertWA.Id
 
 Write-Host `n"Getting Properties from Each Rule..." -ForegroundColor Green
+$Error.Clear()
 FOREACH ($Rule in $Rules)
 {
   [string]$RuleDisplayName = $Rule.DisplayName
@@ -77,13 +94,32 @@ FOREACH ($Rule in $Rules)
       #Assign the module configuration the XML type and encapsulate it to make it easy to retrieve values
       [xml]$WAModuleConfigXML = "<Root>" + $WAModuleConfig + "</Root>"
       $WAXMLRoot = $WAModuleConfigXML.Root
-      #Get the Alert Display Name from the AlertMessageID and MP
-      $AlertName = $WAXMLRoot.AlertMessageId.Split('"')[1]
-      IF (!($AlertName))
+      #Check to see if there is an AlertMessageID
+      IF ($WAXMLRoot.AlertMessageId)
       {
-        $AlertName = $WAXMLRoot.AlertMessageId.Split("'")[1]
+        #AlertMessageId Exists
+        #Get the Alert Display Name from the AlertMessageID
+        $AlertName = $WAXMLRoot.AlertMessageId.Split('"')[1]
+        IF (!($AlertName))
+        {
+          $AlertName = $WAXMLRoot.AlertMessageId.Split("'")[1]
+        }
+        $AlertDisplayName = $MP.GetStringResource($AlertName).DisplayName
       }
-      $AlertDisplayName = $MP.GetStringResource($AlertName).DisplayName
+      ELSE
+      {
+        #AlertMessageId Does Not exist.  This is an odd condition where some MPs do not provide this.
+        #Attempt to Get the Alert Display Name from the WAXML
+        IF ($WAXMLRoot.AlertName)
+        {
+          $AlertDisplayName = $WAXMLRoot.AlertName
+        }
+        ELSE
+        {
+          #We failed to find the Alert Display Name from the AlertMessageId or from the Write Action XML.  Set this to EMPTY value.
+          $AlertDisplayName = "EMPTY"
+        }
+      }
       #Get Alert Priority and Severity
       $AlertPriority = $WAXMLRoot.Priority
       $AlertPriority = switch($AlertPriority)
@@ -117,13 +153,32 @@ FOREACH ($Rule in $Rules)
           #Assign the module configuration the XML type and encapsulate it to make it easy to retrieve values
           [xml]$WAModuleConfigXML = "<Root>" + $WAModuleConfig + "</Root>"
           $WAXMLRoot = $WAModuleConfigXML.Root
-          #Get the Alert Display Name from the AlertMessageID and MP
-          $AlertName = $WAXMLRoot.AlertMessageId.Split('"')[1]
-          IF (!($AlertName))
+          #Check to see if there is an AlertMessageID
+          IF ($WAXMLRoot.AlertMessageId)
           {
-            $AlertName = $WAXMLRoot.AlertMessageId.Split("'")[1]
+            #AlertMessageId Exists
+            #Get the Alert Display Name from the AlertMessageID
+            $AlertName = $WAXMLRoot.AlertMessageId.Split('"')[1]
+            IF (!($AlertName))
+            {
+              $AlertName = $WAXMLRoot.AlertMessageId.Split("'")[1]
+            }
+            $AlertDisplayName = $MP.GetStringResource($AlertName).DisplayName
           }
-          $AlertDisplayName = $MP.GetStringResource($AlertName).DisplayName
+          ELSE
+          {
+            #AlertMessageId Does Not exist.  This is an odd condition where some MPs do not provide this.
+            #Attempt to Get the Alert Display Name from the WAXML
+            IF ($WAXMLRoot.AlertName)
+            {
+              $AlertDisplayName = $WAXMLRoot.AlertName
+            }
+            ELSE
+            {
+              #We failed to find the Alert Display Name from the AlertMessageId or from the Write Action XML.  Set this to EMPTY value.
+              $AlertDisplayName = "EMPTY"
+            }
+          }
           #Get Alert Priority and Severity
           $AlertPriority = $WAXMLRoot.Priority
           $AlertPriority = switch($AlertPriority)
