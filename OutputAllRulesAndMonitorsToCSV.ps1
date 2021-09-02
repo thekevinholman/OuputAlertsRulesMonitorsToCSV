@@ -2,10 +2,13 @@
 #  Get all Rule and Monitors from SCOM and their properties
 #
 #  Author: Kevin Holman
-#  v1.4
+#  v1.5
 #=================================================================================
 param($OutputDir,$ManagementServer)
 
+
+# Parameters section
+#=================================================================================
 IF ($OutputDir)
 {
   $OutDir = $OutputDir
@@ -23,8 +26,11 @@ ELSE
 {
   $ManagementServerName = "localhost"
 }
+#=================================================================================
 
 
+# Begin MAIN script section
+#=================================================================================
 Write-Host `n"Starting Script to get all rules and monitors in SCOM" -ForegroundColor Green
 
 IF (!(Test-Path $OutDir))
@@ -38,8 +44,12 @@ Write-Host `n"Output path is ($OutDir)" -ForegroundColor Green
 Write-Host `n"Connecting to SCOM Management Server ($ManagementServerName)..." -ForegroundColor Green
 $MG = Get-SCOMManagementGroup -ComputerName $ManagementServerName
 
-$RuleReport = @()
+#Set output array object to empty
+$RulesAndMonitorsObj = @()
 
+
+# Begin Rules section
+#=========================
 #Get all the SCOM Rules
 Write-Host `n"Getting all Rules in SCOM..." -ForegroundColor Green
 $Rules = Get-SCOMRule
@@ -63,7 +73,8 @@ FOREACH ($Rule in $Rules)
 {
   [string]$RuleDisplayName = $Rule.DisplayName
   [string]$RuleName = $Rule.Name
-  [string]$Target = ($ClassHT.($Rule.Target.Id.Guid)).DisplayName
+  [string]$TargetDisplayName = ($ClassHT.($Rule.Target.Id.Guid)).DisplayName
+  [string]$TargetName = ($ClassHT.($Rule.Target.Id.Guid)).Name
   [string]$Category = $Rule.Category
   [string]$Enabled = $Rule.Enabled
     IF ($Enabled -eq "onEssentialMonitoring") {$Enabled = "TRUE"}
@@ -201,9 +212,11 @@ FOREACH ($Rule in $Rules)
 
   #Create generic object and assign values  
   $obj = New-Object -TypeName psobject
+  $obj | Add-Member -Type NoteProperty -Name "WorkFlowType" -Value "Rule"
   $obj | Add-Member -Type NoteProperty -Name "DisplayName" -Value $RuleDisplayName
   $obj | Add-Member -Type NoteProperty -Name "Name" -Value $RuleName
-  $obj | Add-Member -Type NoteProperty -Name "Target" -Value $Target
+  $obj | Add-Member -Type NoteProperty -Name "TargetDisplayName" -Value $TargetDisplayName
+  $obj | Add-Member -Type NoteProperty -Name "TargetName" -Value $TargetName
   $obj | Add-Member -Type NoteProperty -Name "Category" -Value $Category 
   $obj | Add-Member -Type NoteProperty -Name "Enabled" -Value $Enabled
   $obj | Add-Member -Type NoteProperty -Name "Alert" -Value $GenAlert
@@ -212,22 +225,18 @@ FOREACH ($Rule in $Rules)
   $obj | Add-Member -Type NoteProperty -Name "AlertSeverity" -Value $AlertSeverity
   $obj | Add-Member -Type NoteProperty -Name "MPDisplayName" -Value $MPDisplayName
   $obj | Add-Member -Type NoteProperty -Name "MPName" -Value $MPName
-  $obj | Add-Member -Type NoteProperty -Name "DataSource" -Value $RuleDS
+  $obj | Add-Member -Type NoteProperty -Name "RuleDataSource" -Value $RuleDS
+  $obj | Add-Member -Type NoteProperty -Name "MonitorClassification" -Value ""
+  $obj | Add-Member -Type NoteProperty -Name "MonitorType" -Value ""
   $obj | Add-Member -Type NoteProperty -Name "Description" -Value $Description
-  $RuleReport += $obj
+  $RulesAndMonitorsObj += $obj
 }
-
-Write-Host `n"Generating Rules.csv at ($OutDir)..." -ForegroundColor Green
-$RuleReport | Export-Csv $OutDir\Rules.csv -NotypeInformation
-
+#=========================
+# End Rules section
 
 
-####################
-# Monitor Section:
-####################
-
-$MonitorReport = @()
-
+# Begin Monitors section
+#=========================
 #Get all the SCOM Monitors
 Write-Host `n"Getting all Monitors in SCOM..." -ForegroundColor Green
 $Monitors =  Get-SCOMMonitor
@@ -238,7 +247,8 @@ FOREACH ($Monitor in $Monitors)
 {
   [string]$MonitorDisplayName = $Monitor.DisplayName
   [string]$MonitorName = $Monitor.Name
-  [string]$Target = ($ClassHT.($Monitor.Target.Id.Guid)).DisplayName
+  [string]$TargetDisplayName = ($ClassHT.($Monitor.Target.Id.Guid)).DisplayName
+  [string]$TargetName = ($ClassHT.($Monitor.Target.Id.Guid)).Name
   [string]$Category = $Monitor.Category
   [string]$Enabled = $Monitor.Enabled
     IF ($Enabled -eq "onEssentialMonitoring") {$Enabled = "TRUE"}
@@ -278,9 +288,11 @@ FOREACH ($Monitor in $Monitors)
 
   #Create generic object and assign values  
   $obj = New-Object -TypeName psobject
+  $obj | Add-Member -Type NoteProperty -Name "WorkFlowType" -Value "Monitor"
   $obj | Add-Member -Type NoteProperty -Name "DisplayName" -Value $MonitorDisplayName
   $obj | Add-Member -Type NoteProperty -Name "Name" -Value $MonitorName
-  $obj | Add-Member -Type NoteProperty -Name "Target" -Value $Target
+  $obj | Add-Member -Type NoteProperty -Name "TargetDisplayName" -Value $TargetDisplayName
+  $obj | Add-Member -Type NoteProperty -Name "TargetName" -Value $TargetName
   $obj | Add-Member -Type NoteProperty -Name "Category" -Value $Category 
   $obj | Add-Member -Type NoteProperty -Name "Enabled" -Value $Enabled
   $obj | Add-Member -Type NoteProperty -Name "Alert" -Value $GenAlert
@@ -289,12 +301,15 @@ FOREACH ($Monitor in $Monitors)
   $obj | Add-Member -Type NoteProperty -Name "AlertSeverity" -Value $AlertSeverity
   $obj | Add-Member -Type NoteProperty -Name "MPDisplayName" -Value $MPDisplayName
   $obj | Add-Member -Type NoteProperty -Name "MPName" -Value $MPName
+  $obj | Add-Member -Type NoteProperty -Name "RuleDataSource" -Value ""
   $obj | Add-Member -Type NoteProperty -Name "MonitorClassification" -Value $MonitorClassification
   $obj | Add-Member -Type NoteProperty -Name "MonitorType" -Value $MonitorType
   $obj | Add-Member -Type NoteProperty -Name "Description" -Value $Description
-  $MonitorReport += $obj
+  $RulesAndMonitorsObj += $obj
 }
+#=========================
+# End Monitors section
 
-Write-Host `n"Generating Monitors.csv at ($OutDir)..." -ForegroundColor Green
-$MonitorReport | Export-Csv $OutDir\Monitors.csv -NotypeInformation
+Write-Host `n"Generating RulesAndMonitors.csv at ($OutDir)..." -ForegroundColor Green
+$RulesAndMonitorsObj | Export-Csv $OutDir\RulesAndMonitors.csv -NotypeInformation
 #End of Script
