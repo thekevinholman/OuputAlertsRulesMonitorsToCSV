@@ -1,4 +1,4 @@
-# OuputAlertsRulesMonitorsToCSV
+# OuputAlertsRulesMonitorsToCSV PowerShell Script
 
 ## [Download Here][Download]
 
