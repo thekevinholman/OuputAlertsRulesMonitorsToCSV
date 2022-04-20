@@ -9,6 +9,8 @@
 https://kevinholman.com/2018/08/11/get-all-scom-rules-and-monitors-with-their-alert-details-to-a-csv/
 
 Version History:
+* 1.6  (04-20-2022)
+	* Added Alert information for rules using System.Health.GenerateAlertForType
 * 1.5  (09-02-2021)
 	* Combined rules and monitors into a single CSV output
 	* Added Target class DisplayName and Name
