@@ -2,7 +2,7 @@
 #  Get all Rule and Monitors from SCOM and their properties
 #
 #  Author: Kevin Holman
-#  v1.5
+#  v1.6
 #=================================================================================
 param($OutputDir,$ManagementServer)
 
@@ -62,13 +62,16 @@ FOREACH ($Class in $Classes)
   $ClassHT.Add("$($Class.Id)",$Class)
 }
 
-#Get GenerateAlert WriteAction module
+#Get GenerateAlert WriteAction modules by ID
 $HealthMP = Get-SCOMManagementPack -Name "System.Health.Library"
 $AlertWA = $HealthMP.GetModuleType("System.Health.GenerateAlert")
+$AlertForTypeWA = $HealthMP.GetModuleType("System.Health.GenerateAlertForType")
 $AlertWAID = $AlertWA.Id
+$AlertForTypeWAID = $AlertForTypeWA.Id
 
 Write-Host `n"Getting Properties from Each Rule..." -ForegroundColor Green
 $Error.Clear()
+
 FOREACH ($Rule in $Rules)
 {
   [string]$RuleDisplayName = $Rule.DisplayName
@@ -92,13 +95,13 @@ FOREACH ($Rule in $Rules)
   $AlertSeverity = ""
   $WA = $Rule.writeactioncollection
  
-  #Inspect each WA module to see if it contains a System.Health.GenerateAlert module
+  #Inspect each WA module to see if it contains a System.Health.GenerateAlert module or System.Health.GenerateAlertForType module
   FOREACH ($WAModule in $WA)
   {
     $WAId = $WAModule.TypeId.Id
-    IF ($WAId -eq $AlertWAID)
+    IF (($WAId -eq $AlertWAID) -or ($WAId -eq $AlertForTypeWAID))
     {
-      #this rule generates alert using System.Health.GenerateAlert module
+      #this rule generates alert using System.Health.GenerateAlert module OR the System.Health.GenerateAlertForType module
       $GenAlert = $true
       #Get the module configuration
       [string]$WAModuleConfig = $WAModule.Configuration
